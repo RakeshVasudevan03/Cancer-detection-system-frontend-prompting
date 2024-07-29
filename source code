@@ -1,0 +1,76 @@
+### !pip install fastai
+
+#importing libraries
+pip install gradio
+from fastai import *
+from fastai.vision import *
+from fastai.vision.data import *
+from fastai.vision.data import ImageDataLoaders
+from fastai.metrics import error_rate
+from pathlib import Path
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import cv2
+import gradio as gr
+
+x  = '/content/Img/Test'
+path = Path(x)
+path.ls()
+
+from fastai.vision.all import *
+
+np.random.seed(40)
+data = ImageDataLoaders.from_folder(path, train='.', valid_pct=0.2,
+                                    item_tfms=Resize(460),
+                                    batch_tfms=[*aug_transforms(size=224), Normalize.from_stats(*imagenet_stats)],
+                                    num_workers=4)
+
+data
+
+print(data.train_ds.vocab)
+len(data.train_ds.vocab)
+data.train_ds.c
+
+learn = cnn_learner(data, models.resnet18, metrics=[accuracy], model_dir = Path('../kaggle/working'),path = Path("."))
+
+learn.lr_find()
+learn.recorder.plot_lr_find()
+
+lr1 = 1e-3
+lr2 = 1e-1
+learn.fit_one_cycle(30,slice(lr1,lr2))
+
+learn.unfreeze()
+learn.fit_one_cycle(10,slice(1e-4,1e-3))
+
+
+learn.recorder.plot_loss()
+
+interp = ClassificationInterpretation.from_learner(learn)
+interp.plot_confusion_matrix()
+
+interp.plot_top_losses(6,figsize = (25,5))
+
+
+
+def normaltest(p,Hospital_Name,Doctor_Name,Patient_Name,Patient_age,image):
+  img = PILImage.create(image)
+  d=learn.predict(img)[0]
+  if d=='Normal':
+    ad="Have a good day!!!"
+  else:
+    ad="Patient must be under proper medication!!!"
+  if p=="Doctor":
+    m="Hi Doctor!!!.... Hope this report is useful!!!....."
+  else:
+    m="Hi Mr/Ms"+Patient_Name+"!!!.... Hope this report is useful!!!....."
+  return m,Hospital_Name,Doctor_Name,Patient_Name,Patient_age,Image.open(image),learn.predict(img)[0],ad
+  print(learn.predict(img)[0])
+  #return learn.predict(img)[0]
+
+demo=gr.Interface(fn=normaltest,inputs=[gr.Dropdown(["Doctor","Patient"],label="You are a...."),gr.Textbox(label = "Hospital Name"),gr.Textbox(label = "Doctor Name"),gr.Textbox(label = "Patient Name"),gr.Textbox(label = "Patient Age"),'file'],outputs=[gr.Text(label="REPORT"),gr.Text(label="Hospital Name"),gr.Text(label="Doctor Name"),gr.Text(label="Patient Name"),gr.Text(label="Patient Age"),'image',gr.Text(label="Result"),gr.Text(label="Advise")])
+
+demo.launch()
